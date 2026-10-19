@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>업무비서 개인정보 처리방침</title>
+<!-- 1판 (2026-10-17). 빈칸은 운영자 결정으로 채움. 올리는 날이 시행일과 다르면 시행일·변경 이력을 올리는 날로 고친다 (plan-출시.md 3단계).
+     틀: 개인정보 보호법 제30조제1항, 시행령 제31조제1항, 제28조의8제2항, 개인정보보호위원회 「개인정보 처리방침 작성지침」(2026).
+     실제 코드와 맞춘 사실: server/migrations/006_billing.sql (이메일·IP·로그인 계정 보관 기한), 001_license.sql (기기 식별값·마지막 사용 시각),
+     003_candidates.sql (후보: 운영자가 받아 갈 때 지움), 005_feedback_retention.sql (의견: 30일),
+     007_privacy_retention.sql (PC 식별값: 기간 끝 30일, 후보: 30일), pay/index.html (sessionStorage, 카드 모드에서만 토스 스크립트).
+     코드의 보관 기한을 바꾸면 이 글도 함께 바꾼다.
+     이메일 동의 안내(server/pay/index.html)를 바꾸면 billing.ts 의 CONSENT_VERSION 도 바꾼다.
+     법무 확인 때 볼 것: Supabase 운영 인력의 국외 접근 여부(Supabase DPA), Gmail 보낸편지함 정리 주기 -->
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e3e3e0; --accent: #2f6fdb; --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161618; --card: #222225; --ink: #f2f2f2; --muted: #a1a1a6; --line: #38383c; --accent: #5b8ff0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 "Pretendard", system-ui, sans-serif; word-break: keep-all; overflow-wrap: anywhere; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 36px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: var(--bg); font-weight: 600; }
+  .wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .note { color: var(--muted); font-size: 14px; }
+  a { color: var(--accent); }
+  ul, ol { padding-left: 20px; }
+  nav ol { columns: 2; column-gap: 24px; font-size: 14px; }
+  @media (max-width: 520px) { nav ol { columns: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>업무비서 개인정보 처리방침</h1>
+  <p class="sub">시행일: 2026년 10월 20일 · 운영자: 문찬호</p>
+
+  <p>업무비서 운영자(이하 「운영자」)는 「개인정보 보호법」 제30조에 따라 선생님의 개인정보를 어떻게 다루는지 알려 드리고, 궁금한 점이나 불편을 빨리 해결해 드리려고 이 방침을 공개해요.</p>
+
+  <div class="box">
+    <b>한눈에 보기</b>
+    <ul>
+      <li>무료로 시작할 때 <b>이메일 한 가지</b>만 받아요. 구독이 끝나고 30일 뒤 지워요.</li>
+      <li>업무비서가 선생님 PC 에서 만드는 문서, 대화, 학생 정보는 <b>운영자에게 오지 않아요.</b></li>
+      <li>개인정보를 팔거나 다른 곳에 주지 않아요. 메일을 보낼 때만 Google(미국)을 거쳐요.</li>
+      <li>쿠키, 광고, 방문 분석 도구를 쓰지 않아요.</li>
+    </ul>
+  </div>
+
+  <nav><ol>
+    <li><a href="#s1">처리 목적과 항목</a></li>
+    <li><a href="#s2">보유 기간</a></li>
+    <li><a href="#s3">파기 절차와 방법</a></li>
+    <li><a href="#s4">제3자 제공</a></li>
+    <li><a href="#s5">처리 위탁</a></li>
+    <li><a href="#s6">국외 이전</a></li>
+    <li><a href="#s7">선생님의 권리와 행사 방법</a></li>
+    <li><a href="#s8">안전성 확보 조치</a></li>
+    <li><a href="#s9">자동 수집 장치(쿠키)</a></li>
+    <li><a href="#s10">처리하지 않는 정보</a></li>
+    <li><a href="#s11">보호책임자와 구제 기관</a></li>
+    <li><a href="#s12">방침의 변경</a></li>
+  </ol></nav>
+
+  <h2 id="s1">1. 무엇을, 왜, 어떤 근거로 받나요</h2>
+  <div class="wrap"><table>
+    <tr><th>받는 것</th><th>왜</th><th>언제</th><th>근거</th></tr>
+    <tr><td>이메일 주소 (필수)</td><td>무료 기간 종료·유료 전환 안내, 새 판 안내, 문의 답변</td><td>무료로 시작할 때</td><td>동의 (법 제15조제1항제1호)</td></tr>
+    <tr><td>이메일 확인용 로그인 기록 (이메일, 확인 시각)</td><td>입력한 이메일이 본인 것인지 6자리 코드로 확인</td><td>확인 코드를 받을 때</td><td>동의</td></tr>
+    <tr><td>동의한 시각, 보여 드린 안내의 판</td><td>동의를 받았다는 증명</td><td>무료로 시작할 때</td><td>법 제22조 (동의 증명)</td></tr>
+    <tr><td>접속 주소(IP)를 알아볼 수 없게 바꾼 값</td><td>같은 곳에서 하루 3번이 넘는 자동 가입 막기</td><td>무료로 시작할 때</td><td>동의</td></tr>
+    <tr><td>PC 식별값을 알아볼 수 없게 바꾼 값, 좌석 번호, 마지막 사용 시각</td><td>구독한 PC 에서만 업무비서가 돌게 하기 (한 좌석 = PC 한 대)</td><td>좌석 키를 등록할 때, 업무비서를 쓸 때</td><td>계약 이행 (법 제15조제1항제4호)</td></tr>
+    <tr><td>앱 개선 의견 글 (선택)</td><td>업무비서 고치기</td><td>설정에서 따로 동의하고 「보내기」 를 누른 글만</td><td>동의</td></tr>
+    <tr><td>표준 일 처리 순서 후보 글 (선택)</td><td>다른 선생님들과 나눌 처리 순서 만들기</td><td>설정에서 따로 동의하고 「보내기」 를 누른 글만</td><td>동의</td></tr>
+  </table></div>
+  <p>의견·후보 글은 보내기 전에 업무비서가 이름, 전화번호, 학생을 알아볼 수 있는 표현을 찾아 걸러요. 걸리면 보내지 않아요. 그래도 글에 개인정보를 쓰지 말아 주세요.</p>
+  <p>업무비서는 선생님 본인의 Claude 계정으로 돌아가요. 선생님 PC 에서 다루는 문서와 대화는 그 계정과 선생님 PC 사이에서만 오가고, 운영자 서버로 오지 않아요. 그 처리는 Anthropic 과 선생님 사이의 약관과 방침을 따라요.</p>
+  <p class="note">서비스를 쓰는 동안 서버에는 접속 주소, 접속 시각 같은 기술 기록이 저절로 남을 수 있어요. 운영자는 이 기록을 장애·부정 이용 확인에만 쓰고, 서버 회사의 기록 보관 기간이 지나면 없어져요.</p>
+
+  <h2 id="s2">2. 얼마나 두나요</h2>
+  <div class="wrap"><table>
+    <tr><th>무엇</th><th>보유 기간</th></tr>
+    <tr><td>이메일 주소</td><td>구독이 끝나고 30일. 시작하다 멈춘 가입은 30일.</td></tr>
+    <tr><td>이메일 확인용 로그인 기록</td><td>좌석 키를 드리면 바로 지워요. 남은 것은 하루, 코드만 받고 확인하지 않은 것은 1시간.</td></tr>
+    <tr><td>접속 주소를 바꾼 값</td><td>이틀</td></tr>
+    <tr><td>동의 시각·안내 판</td><td>구독 기록과 함께 둬요. 이메일은 위 기한에 지워요.</td></tr>
+    <tr><td>PC 식별값을 바꾼 값, 마지막 사용 시각</td><td>좌석의 사용 기간이 끝나고 30일 (구독을 해지해도 이미 받은 기간이 끝난 뒤부터 셈. 더 빨리 지워 달라고 하시면 바로 지워요)</td></tr>
+    <tr><td>좌석 번호 (무작위 번호)</td><td>구독 기록과 함께 둬요. 이메일을 지운 뒤에는 누구의 것인지 알 수 없어요.</td></tr>
+    <tr><td>앱 개선 의견 글</td><td>운영자가 받아 간 때까지, 늦어도 30일</td></tr>
+    <tr><td>표준 일 처리 순서 후보 글</td><td>운영자가 받아 간 때까지, 늦어도 30일</td></tr>
+    <tr><td>운영자가 보낸 안내 메일 (Gmail 보낸편지함)</td><td>30일 (운영자가 매달 보낸편지함에서 지워요)</td></tr>
+  </table></div>
+  <p>다른 법률이 보관을 요구하는 정보는 받지 않아요. 결제를 받게 되면 이 방침을 먼저 고쳐 알려 드려요.</p>
+
+  <h2 id="s3">3. 어떻게 지우나요 (파기 절차와 방법)</h2>
+  <ul>
+    <li><b>절차:</b> 보유 기간이 지난 정보는 서버의 정리 작업이 매일 저절로 찾아 지워요. 선생님이 지워 달라고 하시면 운영자가 확인한 뒤 바로 지워요.</li>
+    <li><b>방법:</b> 데이터베이스에서 다시 살릴 수 없게 지워요. 종이로 출력하거나 따로 파일로 두지 않아요.</li>
+    <li>서버 회사가 만든 백업에 사본이 남아 있었다면, 그 회사의 백업 보관 기간이 지나면 함께 없어져요.</li>
+  </ul>
+
+  <h2 id="s4">4. 다른 곳에 주나요 (제3자 제공)</h2>
+  <p>제3자에게 개인정보를 주지 않아요. 법률에 특별한 규정이 있거나 수사기관이 법에 따라 정당하게 요구하는 경우만 예외예요.</p>
+
+  <h2 id="s5">5. 맡겨서 처리하는 곳 (처리 위탁)</h2>
+  <div class="wrap"><table>
+    <tr><th>맡는 곳</th><th>맡기는 일</th><th>정보가 있는 곳</th></tr>
+    <tr><td>Supabase, Inc.</td><td>서버·데이터베이스 운영, 이메일 확인 코드 처리</td><td>대한민국 서울 (AWS 서울 리전)</td></tr>
+    <tr><td>Google LLC</td><td>확인 코드·안내 메일 보내기 (Gmail)</td><td>국외 (6번 참고)</td></tr>
+  </table></div>
+  <p>맡길 때는 맡은 일 밖에 쓰지 않기, 안전하게 지키기, 다시 맡기지 않기 등이 각 회사의 데이터 처리 약관에 들어 있는지 확인하고, 맡긴 곳이 바뀌면 이 방침에 바로 알려요.</p>
+  <p class="note">참고: 이 페이지와 구매 페이지는 GitHub Pages(GitHub, Inc., 미국)로 띄워요. GitHub 는 보안을 위해 방문자의 접속 주소를 기록해요. 지금은 카드 결제를 받지 않아 구매 페이지가 토스페이먼츠 등 결제 회사에 연결하지 않고, 카드 정보도 어디에도 가지 않아요.</p>
+
+  <h2 id="s6">6. 나라 밖으로 옮기는 정보 (국외 이전)</h2>
+  <p>「개인정보 보호법」 제28조의8제1항제3호(처리위탁·보관)에 따라 아래와 같이 알려 드려요.</p>
+  <div class="wrap"><table>
+    <tr><th>항목</th><th>내용</th></tr>
+    <tr><td>옮기는 정보</td><td>이메일 주소, 보내는 메일 내용 (확인 코드, 안내 글)</td></tr>
+    <tr><td>옮기는 나라</td><td>미국 등 Google 데이터센터가 있는 나라</td></tr>
+    <tr><td>옮기는 때와 방법</td><td>확인 코드나 안내 메일을 보낼 때마다, 인터넷을 통해 암호화(TLS)해서 보내요</td></tr>
+    <tr><td>받는 곳</td><td>Google LLC (개인정보 문의: <a href="https://support.google.com/policies/contact/general_privacy_form" rel="noopener">support.google.com/policies</a>)</td></tr>
+    <tr><td>받는 곳이 쓰는 목적</td><td>메일 보내기</td></tr>
+    <tr><td>보유 기간</td><td>운영자 메일함에서 지울 때까지 (2번의 보낸편지함 기간)</td></tr>
+    <tr><td>거부하는 방법과 결과</td><td>무료 시작을 하지 않으시면 옮겨지지 않아요. 다만 이메일 확인 없이는 업무비서 구독을 시작할 수 없어요.</td></tr>
+  </table></div>
+  <p class="note">Supabase, Inc. 는 미국 회사지만 업무비서의 데이터는 서울 서버에 둬요.</p>
+
+  <h2 id="s7">7. 선생님의 권리와 행사 방법</h2>
+  <ol>
+    <li>언제든 내 정보를 <b>보기(열람), 고치기(정정), 지우기(삭제), 처리 멈추기(처리정지), 동의 거두기(철회)</b>를 요청할 수 있어요.</li>
+    <li>11번의 연락처로 메일을 주시면 늦어도 10일 안에 처리하고 결과를 알려 드려요. 본인인지 확인하려고 가입한 이메일로 답을 드려요.</li>
+    <li>대리인(법정대리인이나 위임받은 사람)도 위임장을 함께 보내 요청할 수 있어요.</li>
+    <li>법률에 따라 요청을 들어 드릴 수 없을 때는 그 이유와 이의를 제기하는 방법을 알려 드려요.</li>
+    <li>이메일을 지우거나 동의를 거두면 안내 메일을 받을 수 없어 구독도 함께 끝나요. 이미 받은 기간은 끝까지 쓰실 수 있어요.</li>
+    <li>남의 이메일로 가입하지 말아 주세요. 다른 사람의 정보를 함부로 쓰면 법에 따라 책임을 질 수 있어요.</li>
+  </ol>
+
+  <h2 id="s8">8. 안전하게 지키는 방법 (안전성 확보 조치)</h2>
+  <ul>
+    <li><b>관리:</b> 개인정보는 운영자 한 사람만 다뤄요. 서버 관리 계정은 2단계 인증으로 지켜요.</li>
+    <li><b>기술:</b> 데이터베이스는 바깥에서 직접 읽을 수 없게 막고, 서버 프로그램만 정해진 길로 읽고 써요. 접속 주소와 PC 식별값은 원래 값을 두지 않고 알아볼 수 없게 바꾼(해시) 값만 둬요. 좌석 키도 원문 대신 해시를 둬요. 모든 통신은 암호화(HTTPS)하고, 서버 비밀 키는 따로 잠긴 저장소에 둬요.</li>
+    <li><b>물리:</b> 서버는 출입이 통제되는 클라우드 데이터센터(AWS 서울)에 있어요.</li>
+  </ul>
+
+  <h2 id="s9">9. 쿠키 같은 자동 수집 장치</h2>
+  <p>쿠키와 방문 분석·광고 도구를 쓰지 않아요. 그래서 거부할 설정도 따로 없어요.</p>
+  <p>가입 화면은 창을 닫으면 지워지는 브라우저 저장 공간(sessionStorage)에 가입 번호와 이메일을 잠깐 둬요. 화면을 새로 고쳐도 두 번 가입되지 않게 하려는 것이고, 이 정보는 선생님 브라우저에만 있어요.</p>
+
+  <h2 id="s10">10. 받지 않는 정보</h2>
+  <ul>
+    <li>업무비서는 선생님을 위한 서비스라 <b>만 14세 미만 아동</b>의 개인정보를 받지 않아요.</li>
+    <li>민감정보(건강, 장애 등)와 고유식별정보(주민등록번호 등)를 받지 않아요.</li>
+    <li>가명정보를 만들거나 다른 곳과 결합하지 않아요.</li>
+  </ul>
+
+  <h2 id="s11">11. 개인정보 보호책임자와 도움받을 곳</h2>
+  <div class="box">
+    개인정보 보호책임자 (권리 요청·고충 접수): 문찬호<br>
+    연락처: <a href="mailto:moonch4526@gmail.com">moonch4526@gmail.com</a>
+  </div>
+  <p>개인정보 침해로 상담이나 구제가 필요하면 아래 기관에 문의할 수 있어요.</p>
+  <ul>
+    <li>개인정보침해신고센터: privacy.kisa.or.kr, 국번 없이 118</li>
+    <li>개인정보분쟁조정위원회: www.kopico.go.kr, 1833-6972</li>
+    <li>대검찰청: www.spo.go.kr, 국번 없이 1301</li>
+    <li>경찰청: ecrm.police.go.kr, 국번 없이 182</li>
+  </ul>
+
+  <h2 id="s12">12. 이 방침이 바뀔 때</h2>
+  <p>이 방침이 바뀌면 시행 7일 전에 이 페이지에 알려요. 받는 정보나 맡기는 곳이 늘어나는 등 중요한 변경은 30일 전에 알리고, 가입한 이메일로도 알려 드려요.
+    지난 판은 아래 변경 이력에서 볼 수 있어요.</p>
+  <div class="wrap"><table>
+    <tr><th>판</th><th>시행일</th><th>바뀐 것</th></tr>
+    <tr><td>1판</td><td>2026년 10월 20일</td><td>처음 만듦</td></tr>
+  </table></div>
+</main>
+</body>
+</html>

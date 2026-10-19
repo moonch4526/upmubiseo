@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><!-- 주소의 카드 등록 결과가 다른 곳으로 새지 않게 (보안 검토) -->
+<title>업무비서 구독</title>
+<!-- 구매 페이지 (plan-결제.md). 정적 호스팅에 둔다 (supabase.co 함수는 HTML 을 글자로 내보내 페이지가 안 된다).
+     흐름: 요금제 고르기 → 토스 카드 등록(requestBillingAuth) → 이 페이지로 돌아와 서버 /billing-start → 좌석 키 한 번 보이기.
+     가격은 서버 plans 표에서 읽는다. 금액은 서버가 정한다 (이 페이지가 보내는 값은 요금제 이름뿐) -->
+<!-- 토스 스크립트는 카드 모드일 때만 불러온다 (아래 loadToss). 무료 모드 방문 기록이 토스에 남지 않게 (처리방침 5번, 2026-10-17) -->
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e3e3e0;
+    --accent: #2f6fdb; --accent-ink: #ffffff; --warn: #b3261e; --ok: #1e7d32; --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161618; --card: #222225; --ink: #f2f2f2; --muted: #a1a1a6; --line: #38383c; --accent: #5b8ff0; --warn: #ff8a80; --ok: #7bd389; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 "Pretendard", system-ui, sans-serif; word-break: keep-all; }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .plans { display: grid; gap: 12px; margin-bottom: 20px; }
+  .plan { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--radius); cursor: pointer; }
+  .plan:has(input:checked) { border-color: var(--accent); }
+  .plan b { display: block; }
+  .plan span { color: var(--muted); font-size: 14px; }
+  .plan s { color: var(--muted); margin-right: 6px; }
+  .plan .now { color: var(--ink); font-weight: 700; font-size: 17px; }
+  .plan .badge { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; vertical-align: 2px; }
+  .notice { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; font-size: 14px; color: var(--muted); }
+  .notice ul { margin: 6px 0 0; padding-left: 18px; }
+  label.agree { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0; font-size: 15px; }
+  label.field { display: block; margin-top: 16px; font-size: 15px; font-weight: 600; }
+  label.field span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  #email { width: 100%; margin-top: 6px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; }
+  #email:focus, #code:focus { outline: none; border-color: var(--accent); }
+  #code { width: 100%; margin-top: 6px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: 600 20px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 6px; }
+  button.ghost { background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 15px; padding: 10px; margin-bottom: 8px; }
+  details.privacy { font-size: 13px; color: var(--muted); margin: -8px 0 12px; }
+  details.privacy p { margin: 6px 0 0; }
+  button { width: 100%; padding: 14px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); font-size: 17px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 16px; }
+  .err { color: var(--warn); }
+  .key { font: 600 20px/1.4 ui-monospace, Menlo, monospace; background: var(--card); border: 1.5px dashed var(--ok); border-radius: var(--radius); padding: 16px; text-align: center; letter-spacing: .5px; word-break: break-all; margin: 12px 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>업무비서 구독</h1>
+  <p class="sub" id="lead">특수학교 선생님의 행정 비서. 카드 한 번 등록하면 다달이(또는 해마다) 자동으로 결제돼요.</p>
+
+  <section id="buy">
+    <div class="plans" id="plans"><p class="sub">요금제를 불러오는 중이에요…</p></div>
+    <div class="notice">
+      <b id="notice-title">자동결제 안내</b>
+      <ul id="notice-list">
+        <li>고른 주기마다 등록한 카드로 자동 결제돼요.</li>
+        <li id="free-note" hidden></li>
+        <li>해지는 업무비서 창의 설정 → 구독 에서 언제든 할 수 있어요. 해지해도 결제한 기간 끝까지 쓸 수 있고, 다음 결제부터 멈춰요.</li>
+        <li>만든 문서와 저장된 정보는 해지 뒤에도 선생님 PC 에 그대로 남아요.</li>
+        <li id="docs"><!-- 확인 필요: 카드 결제를 켜기 전에 환불 정책과 사업자 정보를 더한다 --><a href="terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a></li>
+      </ul>
+    </div>
+    <div id="free-form" hidden>
+      <label class="field" for="email">이메일 <span>(무료 기간이 끝나기 전이나 새 판이 나오면 알려 드려요)</span></label>
+      <input type="email" id="email" autocomplete="email" maxlength="254" placeholder="teacher@school.kr">
+      <label class="agree"><input type="checkbox" id="email-ok"> 이메일 수집·이용에 동의해요.</label>
+      <details class="privacy"><summary>무엇을, 왜, 언제까지</summary>
+        <p>이메일이 본인 것인지 확인 코드로 확인해요. 확인에 쓴 로그인 기록은 바로 지워요.</p>
+        <p>받는 것: 이메일 주소 한 가지. 쓰는 곳: 무료 기간 종료·유료 전환 안내, 업데이트 안내. 두는 기간: 구독이 끝나고 30일 뒤 지워요.
+        동의하지 않으면 무료로 시작할 수 없어요.</p>
+        <p>함께 쓰는 것: 자동 가입을 막으려고 접속 주소(IP)를 알아볼 수 없게 바꾼 값으로 이틀 동안만 세요. 주소 그대로는 두지 않아요.</p>
+        <p><a href="privacy.html" target="_blank" rel="noopener">개인정보 처리방침 전문 보기</a></p>
+        <!-- 이 안내를 바꾸면 server/functions/license/billing.ts 의 CONSENT_VERSION 날짜도 바꾼다 --></details>
+      <button id="send-code" type="button" class="ghost" disabled>확인 코드 받기</button>
+      <div id="code-box" hidden>
+        <label class="field" for="code">확인 코드 <span>(메일로 온 6자리 숫자. 안 보이면 스팸함도 봐 주세요)</span></label>
+        <input type="text" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+      </div>
+
+    </div>
+    <label class="agree"><input type="checkbox" id="agree"> <span id="agree-text">위 자동결제 내용을 확인했고 동의해요.</span></label>
+    <button id="go" type="button" disabled>카드 등록하고 구독 시작</button>
+    <p class="msg err" id="buy-err" hidden></p>
+  </section>
+
+  <section id="result" hidden>
+    <h2 id="result-title">결제를 확인하는 중이에요…</h2>
+    <div id="result-body"></div>
+  </section>
+</main>
+<script>
+  // 설정: 가맹 전에는 토스 테스트 클라이언트 키. 가맹되면 live 키와 실제 함수 주소로 바꾼다 (plan-결제.md 「배포」)
+  const TOSS_CLIENT_KEY = "test_ck_REPLACE_ME";
+  const API = "https://txgwtojdsegbuqhnkbwm.supabase.co/functions/v1/license";
+  const PLAN_KEY = "upmubiseo-plan";
+  // 이메일 확인 코드 (Supabase Auth). 공개해도 되는 publishable 키. 배포 때 프로젝트의 키로 바꾼다 (plan-결제.md 「배포」)
+  const AUTH = "https://txgwtojdsegbuqhnkbwm.supabase.co/auth/v1";
+  const PUBLISHABLE_KEY = "sb_publishable_tcxVMfg7p79vjgOuORH2Gg_o95PnYKt";
+
+  const $ = (id) => document.getElementById(id);
+  const won = (n) => Number(n).toLocaleString("ko-KR") + "원";
+
+  // 토스 결제 화면 스크립트: 카드 모드로 판명된 뒤에만 한 번 불러온다
+  const TOSS_SDK = "https://js.tosspayments.com/v2/standard";
+  let tossLoading = null;
+  function loadToss() {
+    if (!tossLoading) tossLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = TOSS_SDK;
+      s.onload = resolve;
+      s.onerror = () => { tossLoading = null; reject(new Error("결제 화면을 불러오지 못했어요.")); };
+      document.head.append(s);
+    });
+    return tossLoading;
+  }
+
+  async function api(route, body) {
+    const res = await fetch(`${API}/${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    return { status: res.status, data };
+  }
+
+  function el(tag, text) { const e = document.createElement(tag); if (text != null) e.textContent = text; return e; }
+
+  async function showPlans() {
+    const box = $("plans");
+    try {
+      const { status, data } = await api("billing-plans", {});
+      if (status !== 200 || !Array.isArray(data.plans) || !data.plans.length) throw new Error();
+      box.replaceChildren(...data.plans.map((p, i) => {
+        const label = el("label"); label.className = "plan";
+        const input = el("input"); input.type = "radio"; input.name = "plan"; input.value = p.code; input.checked = i === 0;
+        const txt = el("div"), price = el("span"), per = p.months === 12 ? "1년" : "1개월";
+        if (p.listPrice > p.price) {             // 할인 중: 정가에 줄을 긋고 할인가를 보인다
+          const until = p.saleUntil ? ` · ${String(p.saleUntil).slice(0, 10)} 까지` : "";
+          // 「지금은 무료」 대신 정가·할인율을 보인다: 값어치는 정가로, 혜택은 배지로 (대표 지시 2026-10-16)
+          const now = el("span", won(p.price)); now.className = "now";
+          const off = Math.round((1 - p.price / p.listPrice) * 100);
+          const badge = el("span", `출시 기념 ${off}% 할인`); badge.className = "badge";
+          price.append(el("s", won(p.listPrice)), now, document.createTextNode(` / ${per}${until}`), badge);
+        } else price.textContent = `${won(p.price)} / ${per}`;
+        txt.append(el("b", p.name), price);
+        label.append(input, txt);
+        return label;
+      }));
+      const sale = data.plans.find((p) => p.listPrice > p.price);
+      if (sale) {                                 // 할인 중 안내 (정가로 바뀌기 전에 알린다는 약속까지 보인다)
+        $("free-note").hidden = false;
+        $("free-note").textContent = `지금은 할인 기간이라 ${won(sale.price)}이에요. 카드는 등록만 해 두고` +
+          `${sale.price === 0 ? " 결제되지 않아요" : " 할인가로 결제돼요"}. 할인이 끝나면 정가(${won(sale.listPrice)})로 자동 결제되고, 바뀌기 전에 미리 알려 드려요.`;
+      }
+      cardMode = data.cardRequired !== false;
+      if (!cardMode) freeMode(sale);
+      else loadToss().catch(() => {});          // 미리 불러 둔다 (누른 뒤 기다리지 않게). 실패하면 누를 때 다시
+      const sync = () => { $("go").disabled = !ready(); };
+      ["agree", "email-ok"].forEach((id) => $(id).addEventListener("change", sync));
+      $("email").addEventListener("input", sync);
+    } catch {
+      box.replaceChildren(el("p", "요금제를 불러오지 못했어요. 잠시 뒤 새로 고쳐 주세요."));
+    }
+  }
+
+  // ── 카드 없이 무료로 시작 (토스 가맹 전, 사용자 결정 2026-10-17). 서버가 cardRequired: false 로 알려 줄 때만 ──
+  let cardMode = true;
+  const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const FREE_KEY = "upmubiseo-free";
+  let codeSentTo = "";
+  const emailNow = () => $("email").value.trim().toLowerCase();
+  function canSendCode() { return $("email-ok").checked && EMAIL.test(emailNow()); }   // 코드 받기는 이메일·동의만 (안내 확인은 시작 버튼에서)
+  function ready() {
+    if (!$("agree").checked) return false;
+    return cardMode || (canSendCode() && codeSentTo === emailNow() && /^\d{6}$/.test($("code").value.trim()));
+  }
+  async function auth(path, body) {
+    const res = await fetch(`${AUTH}/${path}`, { method: "POST", headers: { "Content-Type": "application/json", apikey: PUBLISHABLE_KEY },
+      body: JSON.stringify(body) });
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+  }
+  async function sendCode() {
+    if (!canSendCode()) return;
+    const email = emailNow(), btn = $("send-code");
+    btn.disabled = true; $("buy-err").hidden = true;
+    try {
+      const { status } = await auth("otp", { email, create_user: true });
+      if (status !== 200) throw new Error(status === 429 ? "코드를 너무 자주 받았어요. 잠시 뒤 다시 해 주세요." : "확인 코드를 보내지 못했어요. 이메일을 확인해 주세요.");
+      codeSentTo = email; $("code-box").hidden = false; $("code").focus();
+      btn.textContent = "코드 다시 받기 (1분 뒤)";
+      setTimeout(() => { btn.textContent = "코드 다시 받기"; btn.disabled = !canSendCode(); }, 60000);
+    } catch (err) {
+      $("buy-err").hidden = false; $("buy-err").textContent = err.message || "확인 코드를 보내지 못했어요.";
+      btn.disabled = !canSendCode();
+    }
+    $("go").disabled = !ready();
+  }
+  function freeMode(sale) {
+    $("lead").textContent = "특수학교 선생님의 행정 비서. 지금은 카드 없이 이메일만으로 시작할 수 있어요.";
+    $("notice-title").textContent = "무료 이용 안내";
+    const items = [
+      "카드를 등록하지 않아요. 결제되는 돈은 없어요.",
+      "출시 기념 할인 동안 무료로 쓰고, 한 달씩 저절로 이어져요.",
+      "할인이 끝나면 그 달 끝에 구독이 멈춰요. 이어 쓰려면 그때 카드를 등록해 다시 시작해요. 멈추기 전에 이메일로 알려 드려요.",
+      "만든 문서와 저장된 정보는 구독이 멈춰도 선생님 PC 에 그대로 남아요.",
+    ];
+    $("notice-list").replaceChildren(...items.map((x) => el("li", x)), $("docs"));   // 약관·처리방침 링크 줄은 그대로 둔다
+    $("agree-text").textContent = "위 안내를 확인했고 이용약관에 동의해요.";
+    $("free-form").hidden = false;
+    $("go").textContent = "무료로 시작하기";
+    $("send-code").addEventListener("click", sendCode);
+    $("code").addEventListener("input", () => { $("go").disabled = !ready(); });
+    const syncCode = () => { if (!$("send-code").textContent.includes("1분")) $("send-code").disabled = !canSendCode(); };
+    $("email-ok").addEventListener("change", syncCode);
+    $("email").addEventListener("input", syncCode);
+  }
+  // 같은 창·같은 이메일이면 같은 번호 (다시 눌러도 두 번 만들지 않는다). 이메일을 고쳐 다시 하면 새 번호
+  function freeTicket(email) {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(FREE_KEY) || "null");
+      if (v && v.customerKey && v.token && v.email === email) return { customerKey: v.customerKey, token: v.token };
+    } catch {}
+    const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const v = { customerKey: crypto.randomUUID(), token: hex(32), email };
+    try { sessionStorage.setItem(FREE_KEY, JSON.stringify(v)); } catch {}
+    return { customerKey: v.customerKey, token: v.token };
+  }
+  async function startFree() {
+    if (!ready()) return;
+    $("go").disabled = true;
+    const email = emailNow();
+    const ticket = freeTicket(email);
+    $("buy-err").hidden = true;
+    let verified;
+    try { verified = await auth("verify", { type: "email", email, token: $("code").value.trim() }); } catch { verified = { status: 0, data: {} }; }
+    if (verified.status !== 200 || typeof verified.data.access_token !== "string") {
+      $("buy-err").hidden = false; $("buy-err").textContent = "확인 코드가 맞지 않거나 시간이 지났어요. 코드를 다시 받아 넣어 주세요.";
+      $("go").disabled = !ready();
+      return;
+    }
+    const accessToken = verified.data.access_token;
+    const send = () => api("billing-free", { ...ticket, consent: $("email-ok").checked, accessToken });
+    $("buy").hidden = true; $("result").hidden = false;
+    await showResult(send, "시작");
+  }
+
+  async function startBilling() {
+    const plan = document.querySelector("input[name=plan]:checked")?.value;
+    if (!plan || !$("agree").checked) return;
+    $("go").disabled = true;
+    try {
+      const customerKey = crypto.randomUUID();
+      sessionStorage.setItem(PLAN_KEY, plan);
+      const back = location.origin + location.pathname;
+      await loadToss();
+      const payment = TossPayments(TOSS_CLIENT_KEY).payment({ customerKey });
+      await payment.requestBillingAuth({ method: "CARD", successUrl: `${back}?plan=${plan}`, failUrl: `${back}?failed=1` });
+    } catch (err) {
+      $("buy-err").hidden = false;
+      $("buy-err").textContent = "카드 등록 창을 열지 못했어요. " + (err && err.message ? err.message : "");
+      $("go").disabled = false;
+    }
+  }
+
+  async function finish(params) {
+    $("buy").hidden = true; $("result").hidden = false;
+    const plan = params.get("plan") || sessionStorage.getItem(PLAN_KEY) || "";
+    await showResult(() => api("billing-start", { customerKey: params.get("customerKey"), authKey: params.get("authKey"), plan }), "결제");
+  }
+
+  // 결과 화면: 성공이면 좌석 키, 결과를 모르면 「다시 확인」 (같은 번호로 다시 물어 두 번 만들지 않는다)
+  async function showResult(send, word) {
+    const body = $("result-body");
+    const again = el("button", "다시 확인"); again.type = "button";
+    again.addEventListener("click", () => showResult(send, word));
+    $("result-title").textContent = word === "결제" ? "결제를 확인하는 중이에요…" : "구독을 시작하는 중이에요…";
+    body.replaceChildren(el("p", "잠시만 기다려 주세요. 이 창을 닫지 마세요."));
+    let res;
+    try {
+      res = await send();
+    } catch {
+      $("result-title").textContent = `${word} 결과를 아직 확인하지 못했어요`;
+      body.replaceChildren(el("p", "인터넷 연결을 확인하고 「다시 확인」 을 눌러 주세요. 두 번 만들어지지 않아요."), again);
+      return;
+    }
+    if (res.status === 200) {
+      history.replaceState(null, "", location.pathname);       // 주소창에서 카드 등록 결과를 지운다
+      $("result-title").textContent = "구독을 시작했어요";
+      const key = el("div", res.data.key); key.className = "key";
+      const copy = el("button", "좌석 키 복사"); copy.type = "button";
+      copy.addEventListener("click", async () => { await navigator.clipboard.writeText(res.data.key); copy.textContent = "복사했어요"; });
+      body.replaceChildren(
+        el("p", `${res.data.plan} · ${String(res.data.until || "").slice(0, 10)} 까지`),
+        el("p", "아래 좌석 키를 업무비서 설치 안내에 넣어 주세요. 이 화면에서만 보여요. 꼭 적어 두거나 복사해 두세요."),
+        key, copy);
+      return;
+    }
+    $("result-title").textContent = res.status === 503 ? `${word} 결과를 아직 확인하지 못했어요` : (word === "결제" ? "결제가 끝나지 않았어요" : "구독을 시작하지 못했어요");
+    const msg = el("p", res.data.error || "잠시 뒤 다시 해 주세요."); msg.className = "err";
+    const back = el("button", "처음으로"); back.type = "button";
+    back.addEventListener("click", () => { $("result").hidden = true; $("buy").hidden = false; $("go").disabled = !ready(); });
+    body.replaceChildren(msg, ...(res.status === 503 || res.status >= 500 ? [again] : word === "시작" ? [back] : []));
+  }
+
+  const params = new URLSearchParams(location.search);
+  if (params.get("authKey") && params.get("customerKey")) finish(params);
+  else {
+    if (params.get("failed")) { $("buy-err").hidden = false; $("buy-err").textContent = "카드 등록을 마치지 못했어요. 다시 해 주세요."; }   // 주소의 글은 보이지 않는다 (가짜 안내 막기)
+    showPlans();
+    $("go").addEventListener("click", () => (cardMode ? startBilling() : startFree()));
+  }
+</script>
+</body>
+</html>
